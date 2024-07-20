@@ -1,0 +1,79 @@
+<!-- frontend/templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motorbike Spares Sales Record</title>
+    <!-- Add Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- keep the custom CSS file for any additional styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            background-image: url("{{ url_for('static', filename='images/jan-kopriva-Y2i5PHCeMik-unsplash.jpg') }}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-black bg-opacity-50">
+    <div class="container mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-center text-white shadow-text">BeeMoto Sales Tracker</h1>
+            <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                Logout
+            </a>
+        </div>
+        
+        <div class="bg-white bg-opacity-90 shadow-md rounded px-8 pt-6 pb-8 mb-4">
+            <h2 class="text-2xl font-semibold mb-4">Add Sale</h2>
+            <form id="addSaleForm" class="space-y-4">
+                <input type="text" id="item" placeholder="Item name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="number" id="quantity" placeholder="Quantity" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="number" id="price" placeholder="Price per item (KES)" step="0.01" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" class="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 focus:outline-none focus:shadow-outline">Add Sale</button>
+            </form>
+        </div>
+
+        <div class="bg-white bg-opacity-90 shadow-md rounded px-8 pt-6 pb-8 mb-4">
+            <h2 class="text-2xl font-semibold mb-4">Get Daily Total</h2>
+            <form id="getDailyTotalForm" class="space-y-4">
+                <input type="date" id="totalDate" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded hover:bg-green-700 focus:outline-none focus:shadow-outline">Get Total</button>
+            </form>
+            <p id="dailyTotal" class="mt-4 text-lg font-semibold"></p>
+        </div>
+
+        <div class="bg-white bg-opacity-90 shadow-md rounded px-8 pt-6 pb-8 mb-4">
+            <h2 class="text-2xl font-semibold mb-4">View Daily Sales</h2>
+            <form id="getDailySalesForm" class="space-y-4">
+                <input type="date" id="salesDate" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" class="w-full bg-purple-500 text-white font-bold py-2 px-4 rounded hover:bg-purple-700 focus:outline-none focus:shadow-outline">View Sales</button>
+            </form>
+            <ul id="dailySales" class="mt-4 space-y-2"></ul>
+        </div>
+
+        <div class="bg-white bg-opacity-90 shadow-md rounded px-8 pt-6 pb-8 mb-4">
+            <h2 class="text-2xl font-semibold mb-4">Get Monthly Total</h2>
+            <form id="getMonthlyTotalForm" class="space-y-4">
+                <input type="month" id="monthYear" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Select month and year (e.g., 2024-07)">
+                <button type="submit" class="w-full bg-yellow-500 text-white font-bold py-2 px-4 rounded hover:bg-yellow-700 focus:outline-none focus:shadow-outline">Get Monthly Total</button>
+            </form>
+            <p id="monthlyTotal" class="mt-4 text-lg font-semibold">Monthly Total: KES 0.00</p>
+        </div>
+
+        <div class="bg-white bg-opacity-90 shadow-md rounded px-8 pt-6 pb-8 mb-4">
+            <h2 class="text-2xl font-semibold mb-4">Get Yearly Total</h2>
+            <form id="getYearlyTotalForm" class="space-y-4">
+                <input type="number" id="year" placeholder="Enter year (e.g., 2024)" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" class="w-full bg-indigo-500 text-white font-bold py-2 px-4 rounded hover:bg-indigo-700 focus:outline-none focus:shadow-outline">Get Yearly Total</button>
+            </form>
+            <p id="yearlyTotal" class="mt-4 text-lg font-semibold"></p>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
