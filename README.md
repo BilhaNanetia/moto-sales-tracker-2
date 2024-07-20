@@ -98,7 +98,7 @@ Contributions to this project are welcome. Please follow these steps:
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
 ## Acknowledgments
-- Background image by Rohan on Unsplash
+- Unsplash for background images
 - Tailwind CSS for the styling framework
 - Flask community for the excellent web framework
 ## Contact
