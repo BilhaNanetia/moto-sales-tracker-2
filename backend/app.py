@@ -95,11 +95,19 @@ class SalesRecord:
 
     def get_daily_sales(self, date):
         self.cursor.execute('''
-            SELECT item, quantity, price
+            SELECT id, item, quantity, price
             FROM sales
             WHERE date = ?
         ''', (date,))
         return self.cursor.fetchall()
+    
+    def delete_sale(self, sale_id):
+        self.cursor.execute('''
+            DELETE FROM sales
+            WHERE id = ?
+        ''', (sale_id,))
+        self.conn.commit()
+        return self.cursor.rowcount > 0  # Returns True if a row was deleted, False otherwise
 
     def get_monthly_total(self, year, month):
         start_date = f"{year}-{month:02d}-01"
@@ -146,7 +154,21 @@ def get_daily_total():
 def get_daily_sales():
     date = request.args.get('date')
     sales = record.get_daily_sales(date)
-    return jsonify({'sales': sales})
+    return jsonify({'sales': [{'id': sale[0], 'item': sale[1], 'quantity': sale[2], 'price': sale[3]} for sale in sales]})
+
+@app.route('/delete_sale', methods=['POST'])
+@login_required
+def delete_sale():
+    data = request.json
+    sale_id = data.get('id')
+    if sale_id is None:
+        return jsonify({'success': False, 'error': 'No sale ID provided'}), 400
+    
+    success = record.delete_sale(sale_id)
+    if success:
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'Sale not found'}), 404
 
 @app.route('/get_monthly_total', methods=['GET'])
 def get_monthly_total():
