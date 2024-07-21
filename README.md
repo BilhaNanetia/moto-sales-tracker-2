@@ -48,7 +48,7 @@ pip install -r requirements.txt
 cd backend
 ```
 - Since the database is already setup,
-```
+
 5. Run the Flask application:
 ``` console
 python app.py
