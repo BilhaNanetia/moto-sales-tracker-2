@@ -22,6 +22,58 @@ document.getElementById('addSaleForm').addEventListener('submit', function(e) {
     });
 });
 
+document.getElementById('mpesaPaymentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const phone_number = document.getElementById('phone_number').value;
+    const amount = parseFloat(document.getElementById('payment_amount').value);
+    
+    fetch('/initiate_payment', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone_number, amount }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.ResponseCode === '0') {
+            document.getElementById('mpesaPaymentStatus').textContent = 'Payment initiated successfully. Please complete the payment on your phone.';
+        } else {
+            document.getElementById('mpesaPaymentStatus').textContent = `Payment failed: ${data.errorMessage}`;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('mpesaPaymentStatus').textContent = 'An error occurred while initiating the payment.';
+    });
+});
+
+function initiatePayment() {
+    const phoneNumber = document.getElementById('phoneNumber').value;
+    const amount = document.getElementById('amount').value;
+
+    fetch('/initiate_payment', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone_number: phoneNumber, amount: amount }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Payment initiated successfully. CheckoutRequestID: ' + data.checkoutRequestId);
+        } else {
+            throw new Error(data.error || 'Payment failed');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Payment failed: ' + error.message);
+    });
+}
+
+
 document.getElementById('getDailyTotalForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const date = document.getElementById('totalDate').value;

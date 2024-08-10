@@ -1,19 +1,83 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from requests.auth import HTTPBasicAuth
 import sqlite3
 import datetime
 import os
+import requests
+import base64
+import logging
 
+# Set up Flask app
 template_dir = os.path.abspath('../frontend/templates')
 static_dir = os.path.abspath('../frontend/static')
 
 app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 app.config['SECRET_KEY'] = 'your_secret_key_here'  # Change this to a random secret key
 
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+
+# Set up Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+MPESA_ENVIRONMENT = 'sandbox'  # Change to 'production' when moving to production
+CONSUMER_KEY = 'OAa4XdMA4ONufa3eyk7PLpKD7KH9oTfSWNewuMDA0ZCaj1YZ'
+CONSUMER_SECRET = '4AqHGRBEIbVASnObx1B3xOvW64xV6rnOw7uAjNQ6eFDzTUIdahpHgBetJpbhYogL'
+SHORTCODE = '174379'
+LIPA_NA_MPESA_PASSKEY = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
+
+
+def get_mpesa_access_token():
+    url = f'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
+    if MPESA_ENVIRONMENT == 'sandbox':
+        url = f'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
+    response = requests.get(url, auth=HTTPBasicAuth(CONSUMER_KEY, CONSUMER_SECRET))
+    return response.json()['access_token']
+
+def lipa_na_mpesa_online(phone_number, amount):
+    access_token = get_mpesa_access_token()
+    api_url = f'https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
+    if MPESA_ENVIRONMENT == 'sandbox':
+        api_url = f'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    password = base64.b64encode(f'{SHORTCODE}{LIPA_NA_MPESA_PASSKEY}{timestamp}'.encode()).decode('utf-8')
+
+    payload = {
+        'BusinessShortCode': SHORTCODE,
+        'Password': password,
+        'Timestamp': timestamp,
+        'TransactionType': 'CustomerPayBillOnline',
+        'Amount': amount,
+        'PartyA': phone_number,
+        'PartyB': SHORTCODE,
+        'PhoneNumber': phone_number,
+        'CallBackURL': 'https://mydomain.com/path',
+        'AccountReference': 'BeeMoto Sales',
+        'TransactionDesc': 'Payment for motorbike spares'
+    }
+
+    logger.debug(f"Sending request to M-Pesa API: {api_url}")
+    logger.debug(f"Headers: {headers}")
+    logger.debug(f"Payload: {payload}")
+
+    response = requests.post(api_url, json=payload, headers=headers)
+
+    logger.debug(f"M-Pesa API response status code: {response.status_code}")
+    logger.debug(f"M-Pesa API response content: {response.text}")
+
+    return response.json()
 
 class User(UserMixin):
     def __init__(self, id, username, email, password):
@@ -23,7 +87,7 @@ class User(UserMixin):
         self.password = password
 
 def get_db_connection():
-    db_path = os.path.abspath('../sales_record.db')  # Use an absolute path for the database
+    db_path = os.path.abspath('../sales_record.db')  
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
@@ -144,6 +208,84 @@ def add_sale():
     record.add_sale(data['item'], data['quantity'], data['price'])
     return jsonify({'success': True})
 
+@app.route('/initiate_payment', methods=['POST'])
+def initiate_payment():
+    try:
+        data = request.json
+        phone_number = data.get('phone_number')
+        amount = data.get('amount')
+
+        # Validate input
+        if not phone_number or not amount:
+            return jsonify({
+                'success': False,
+                'error': 'Phone number and amount are required'
+            }), 400
+
+        # Validate phone number format (simple check, you might want to use a more robust regex)
+        if not phone_number.startswith('+254') or len(phone_number) != 13:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid phone number format. Use +254XXXXXXXXX'
+            }), 400
+
+        # Validate amount (assuming amount should be positive)
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                raise ValueError
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid amount. Must be a positive number'
+            }), 400
+
+        # Initiate M-Pesa payment
+        response = lipa_na_mpesa_online(phone_number, amount)
+
+        # Check if the response is valid and contains the expected fields
+        if not isinstance(response, dict):
+            raise ValueError("Invalid response from M-Pesa API")
+
+
+        if 'errorCode' in response:
+            return jsonify({
+                'success': False,
+                'error': f"M-Pesa API error: {response.get('errorMessage', 'Unknown error')}",
+                'errorCode': response.get('errorCode')
+            }), 400
+
+        # If successful, the response should contain a CheckoutRequestID
+        if 'CheckoutRequestID' in response:
+            return jsonify({
+                'success': True,
+                'message': 'Payment initiated successfully',
+                'checkoutRequestId': response['CheckoutRequestID']
+            }), 200
+        
+        # If we don't get an error or a CheckoutRequestID, something unexpected happened
+        raise ValueError("Unexpected response from M-Pesa API")
+  
+    except ValueError as e:
+        app.logger.error(f"Value error in initiate_payment: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+    except requests.RequestException as e:
+        # Handle any network-related errors
+        app.logger.error(f"Network error in initiate_payment: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Network error occurred: {str(e)}'
+        }), 500
+    except Exception as e:
+        # Catch any other unexpected errors
+        app.logger.error(f'Unexpected error in initiate_payment: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': 'An unexpected error occurred'
+        }), 500
 @app.route('/get_daily_total', methods=['GET'])
 def get_daily_total():
     date = request.args.get('date')
