@@ -222,11 +222,11 @@ def initiate_payment():
                 'error': 'Phone number and amount are required'
             }), 400
 
-        # Validate phone number format (simple check, you might want to use a more robust regex)
-        if not phone_number.startswith('+254') or len(phone_number) != 13:
+        # Validate phone number format 
+        if not (phone_number.startswith('254') or len(phone_number) == 12):
             return jsonify({
                 'success': False,
-                'error': 'Invalid phone number format. Use +254XXXXXXXXX'
+                'error': 'Invalid phone number format. Use 254XXXXXXXXX'
             }), 400
 
         # Validate amount (assuming amount should be positive)
@@ -247,7 +247,7 @@ def initiate_payment():
         if not isinstance(response, dict):
             raise ValueError("Invalid response from M-Pesa API")
 
-
+        
         if 'errorCode' in response:
             return jsonify({
                 'success': False,
@@ -263,7 +263,7 @@ def initiate_payment():
                 'checkoutRequestId': response['CheckoutRequestID']
             }), 200
         
-        # If we don't get an error or a CheckoutRequestID, something unexpected happened
+        # If we don't get an error or a CheckoutRequestID
         raise ValueError("Unexpected response from M-Pesa API")
   
     except ValueError as e:
