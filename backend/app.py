@@ -8,6 +8,7 @@ import os
 import requests
 import base64
 import logging
+import uuid
 
 # Set up Flask app
 template_dir = os.path.abspath('../frontend/templates')
@@ -31,6 +32,9 @@ CONSUMER_KEY = 'OAa4XdMA4ONufa3eyk7PLpKD7KH9oTfSWNewuMDA0ZCaj1YZ'
 CONSUMER_SECRET = '4AqHGRBEIbVASnObx1B3xOvW64xV6rnOw7uAjNQ6eFDzTUIdahpHgBetJpbhYogL'
 SHORTCODE = '174379'
 LIPA_NA_MPESA_PASSKEY = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
+
+AIRTEL_CLIENT_ID='a7189115-9ead-47d8-9904-bc419b949983'
+AIRTEL_CLIENT_SECRET='****************************'
 
 
 def get_mpesa_access_token():
@@ -78,6 +82,75 @@ def lipa_na_mpesa_online(phone_number, amount):
     logger.debug(f"M-Pesa API response content: {response.text}")
 
     return response.json()
+
+def get_airtel_money_access_token():
+    url = "https://openapi.airtel.africa/auth/oauth2/token"
+    auth_data = {
+        'client_id': AIRTEL_CLIENT_ID,
+        'client_secret': AIRTEL_CLIENT_SECRET,
+        'grant_type': 'client_credentials'
+    }
+
+    app.logger.debug(f"Requesting Airtel Money access token from: {url}")
+    app.logger.debug(f"Auth data: {auth_data}")
+
+    try:
+        response = requests.post(url, data=auth_data)
+        response.raise_for_status()  # This will raise an exception for HTTP errors
+        
+        app.logger.debug(f"Airtel Money token response: {response.text}")
+        
+        token = response.json().get('access_token')
+        if not token:
+            app.logger.error("No access token in Airtel Money response")
+            return None
+        return token
+    except requests.RequestException as e:
+        app.logger.error(f"Error getting Airtel Money access token: {str(e)}")
+        return None
+
+def initiate_airtel_money_payment(phone_number, amount):
+    try:
+        app.logger.info("Getting Airtel Money access token")
+        access_token = get_airtel_money_access_token()
+        if not access_token:
+            raise ValueError("Failed to obtain Airtel Money access token")
+
+        api_url = 'https://openapi.airtel.africa/merchant/v1/payments/'
+        
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'amount': amount, 
+            'phone_number': phone_number,
+            'currency': 'KES',
+            'transaction_reference': str(uuid.uuid4()),
+            'transaction_description': 'Payment for motorbike spares'
+        }
+
+        app.logger.debug(f"Sending request to Airtel Money API: {api_url}")
+        app.logger.debug(f"Headers: {headers}")
+        app.logger.debug(f"Payload: {payload}")
+
+        response = requests.post(api_url, json=payload, headers=headers)
+        app.logger.debug(f"Airtel Money API response status code: {response.status_code}")
+        app.logger.debug(f"Airtel Money API response content: {response.text}")
+
+        response.raise_for_status()
+        return response.json()
+
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Airtel Money API request failed: {str(e)}", exc_info=True)
+        raise
+    except ValueError as e:
+        app.logger.error(f"Airtel Money payment initiation error: {str(e)}", exc_info=True)
+        raise
+    except Exception as e:
+        app.logger.error(f"Unexpected error in Airtel Money payment initiation: {str(e)}", exc_info=True)
+        raise
 
 class User(UserMixin):
     def __init__(self, id, username, email, password):
@@ -286,6 +359,84 @@ def initiate_payment():
             'success': False,
             'error': 'An unexpected error occurred'
         }), 500
+    
+@app.route('/initiate_airtel_payment', methods=['POST'])
+def initiate_airtel_payment():
+    try:
+        app.logger.info("Initiating Airtel Money payment")
+        data = request.json
+        app.logger.debug(f"Received data: {data}")
+
+        phone_number = data.get('phone_number')
+        amount = data.get('amount')
+
+        app.logger.info(f"Phone number: {phone_number}, Amount: {amount}")
+
+        if not phone_number or not amount:
+            app.logger.warning("Missing phone number or amount")
+            return jsonify({
+                'success': False,
+                'error': 'Phone number and amount are required'
+            }), 400
+
+        if not (phone_number.startswith('254') and len(phone_number) == 12):
+            app.logger.warning(f"Invalid phone number format: {phone_number}")
+            return jsonify({
+                'success': False,
+                'error': 'Invalid phone number format. Use 254XXXXXXXXX'
+            }), 400
+
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                raise ValueError
+        except ValueError:
+            app.logger.warning(f"Invalid amount: {amount}")
+            return jsonify({
+                'success': False,
+                'error': 'Invalid amount. Must be a positive number'
+            }), 400
+
+        app.logger.info("Calling initiate_airtel_money_payment function")
+        response = initiate_airtel_money_payment(phone_number, amount)
+        app.logger.debug(f"Airtel Money API response: {response}")
+
+        if 'error' in response:
+            app.logger.error(f"Airtel Money API error: {response.get('error')}")
+            return jsonify({
+                'success': False,
+                'error': f"Airtel Money API error: {response.get('error', 'Unknown error')}",
+                'errorCode': response.get('errorCode')
+            }), 400
+
+        if 'transaction_id' in response:
+            app.logger.info(f"Payment initiated successfully. Transaction ID: {response['transaction_id']}")
+            return jsonify({
+                'success': True,
+                'message': 'Payment initiated successfully',
+                'transaction_id': response['transaction_id']
+            }), 200
+
+        app.logger.warning("Unexpected response from Airtel Money API")
+        return jsonify({
+            'success': False,
+            'error': 'Unexpected response from Airtel Money API'
+        }), 500
+
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Network error in initiate_airtel_payment: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f'Network error occurred: {str(e)}'
+        }), 500
+    except Exception as e:
+        app.logger.error(f'Unexpected error in initiate_airtel_payment: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'An unexpected error occurred'
+        }), 500
+    
+
 @app.route('/get_daily_total', methods=['GET'])
 def get_daily_total():
     date = request.args.get('date')
